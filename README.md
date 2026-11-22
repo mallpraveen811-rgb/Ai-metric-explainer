@@ -1,7 +1,8 @@
 # AI Metric Explainer: why did the metric move?
 *by Aarsh Mall*
 
-**Live demo:** https://claude.ai/artifact/9AZ2BguH5qWsBNz9W6JHyh
+**Live demo:** https://mallpraveen811-rgb.github.io/Ai-metric-explainer/
+(The analysis, charts and saved AI explanations work for everyone. For live AI answers, paste a free Gemini API key into the page; it stays in your browser tab.)
 
 Dashboards show *that* revenue dropped 26%. Someone then spends a day finding out *why*.
 This project automates that work: SQL splits every monthly change into exact contributions by
