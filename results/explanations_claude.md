@@ -1,0 +1,166 @@
+# Example explanations (LLM: Claude)
+
+Every unusual change (|z| >= 2) in the Olist data, explained from its insight packet. All 9 passed the grounding check.
+
+## revenue · 2017-11
+
+**Black Friday month: revenue jumped 53.28%, driven by more orders**
+
+Revenue rose from R$ 764,756 to R$ 1,172,192 in November 2017, a change of R$ 407,436. This is highly unusual (z-score 4.14, far outside the normal monthly swing). The growth came entirely from the number of orders: the volume effect added R$ 483,712, while smaller baskets took away R$ 76,276 (average order value fell from R$ 168.19 to R$ 157.91). Customers in SP drove 36.9% of the increase, followed by RJ (15.5%) and MG (15.0%); by category, bed_bath_table led with 12.5%.
+
+- SP customers: +R$ 150,191 (36.9% of the change)
+- RJ and MG customers: 15.5% and 15.0%
+- bed_bath_table: +R$ 50,964 (12.5%), with health_beauty at 10.1%
+
+*Caveat:* The packet shows where the extra revenue came from, not why; the November timing suggests a promotion such as Black Friday, but that needs confirming with the marketing calendar.
+
+*Next:* Which days in November had the peak, and do they match a promotion? / Did the smaller order value come from discounts or from cheaper products?
+
+Grounding check: passed
+
+---
+
+## revenue · 2017-12
+
+**Revenue fell 26.5% in December as the November peak unwound**
+
+Revenue fell from R$ 1,172,192 to R$ 861,527, a drop of R$ 310,665, which is unusual (z-score -2.5). Almost all of it is fewer orders: the volume effect was -R$ 284,718, while order size explains only -R$ 25,947. SP customers account for 28.3% of the drop, MG for 15.3% and RJ for 12.8%. By category the biggest declines were bed_bath_table (15.2%), computers_accessories (12.6%) and furniture_decor (12.3%), the same categories that led November's jump.
+
+- Fewer orders, not smaller orders: volume effect -R$ 284,718
+- SP customers: -R$ 87,864 (28.3% of the drop)
+- bed_bath_table: -R$ 47,203 (15.2%)
+
+*Caveat:* Compared with an exceptional November, any normal month looks like a fall; compare December with October before calling it a problem.
+
+*Next:* Is December revenue above or below October's level? / Did the categories that peaked in November return to their earlier trend?
+
+Grounding check: passed
+
+---
+
+## revenue · 2017-06
+
+**Revenue fell 14.25% in June, mainly from fewer orders**
+
+Revenue dropped from R$ 582,711 to R$ 499,652, a fall of R$ 83,059, which is unusual for this period (z-score -2.19). Most of it came from fewer orders (volume effect -R$ 69,637); smaller orders added -R$ 13,421 as average order value slipped from R$ 160.09 to R$ 155.9. The decline was spread out: RJ customers explain 26.9%, SC 12.7% and PR 11.2%. By category, health_beauty fell most (18.8% of the drop), while auto grew and offset 13.3%.
+
+- RJ customers: -R$ 22,382 (26.9% of the drop)
+- health_beauty: -R$ 15,630 (18.8%)
+- Sellers in MG: -R$ 22,324 (26.9%)
+
+*Caveat:* No single segment dominates, so this looks like a broad dip rather than one failure.
+
+*Next:* Did MG-based sellers lose stock or listings in June? / Is June seasonally weak in other years of data?
+
+Grounding check: passed
+
+---
+
+## orders · 2017-11
+
+**Orders up 63.25% in November, led by SP and new customers**
+
+Orders rose from 4,547 to 7,423, an increase of 2,876, which is highly unusual (z-score 4.24). SP customers placed 1,197 extra orders (41.6% of the increase), with MG (13.2%) and RJ (13.1%) next. New customers made up 97.3% of the growth. By category, bed_bath_table (12.8%) and furniture_decor (9.5%) grew most, and furniture_decor more than doubled from 266 to 539 orders.
+
+- SP customers: +1,197 orders (41.6%)
+- New customers: 97.3% of the growth
+- bed_bath_table: +369 orders (12.8%)
+
+*Caveat:* New customers dominate every month in this marketplace, so their large share is expected rather than a sign of a new acquisition push.
+
+*Next:* How many of November's new customers ordered again later? / Which marketing channels brought the extra orders?
+
+Grounding check: passed
+
+---
+
+## orders · 2017-12
+
+**Orders fell 24.29% in December after the November spike**
+
+Orders dropped from 7,423 to 5,620, a fall of 1,803, which is unusual (z-score -2.08). SP customers account for 34.1% of the drop, RJ for 14.6% and MG for 13.8%. By category, bed_bath_table fell by 336 orders (18.6%) and furniture_decor by 228 (12.6%), reversing their November gains. stationery went the other way, adding 79 orders.
+
+- SP customers: -615 orders (34.1%)
+- bed_bath_table: -336 orders (18.6%)
+- Sellers in SP: -1,251 orders (69.4%)
+
+*Caveat:* The fall is measured against a record month, so part of it is simply a return to normal.
+
+*Next:* Is December above the pre-November trend? / Did stationery grow because of a seasonal (school or gift) effect?
+
+Grounding check: passed
+
+---
+
+## late_pct · 2017-11
+
+**Late deliveries tripled to 12.4% in November, worst for RJ**
+
+The share of delivered orders that arrived late rose from 4.18% to 12.4%, a jump of 8.23 points that is extremely unusual (z-score 5.14). Customers in RJ explain 31.8% of the increase: their own late rate rose from 6.88% to 26.04%. SP customers explain 18.5% and MG 9.6%. On the seller side, orders shipped by SP sellers explain 81.5%, and their late rate rose from 4.96% to 14.39%. bed_bath_table (19.7%) and furniture_decor (11.5%), the categories that grew most in November, were the most affected.
+
+- RJ customers: late rate 6.88% → 26.04% (31.8% of the increase)
+- SP sellers: late rate 4.96% → 14.39% (81.5%)
+- bed_bath_table: late rate 4.36% → 18.7% (19.7%)
+
+*Caveat:* The jump coincides with November's order spike, which suggests the delivery network was overloaded, but the packet cannot prove that link.
+
+*Next:* Did carrier hand-over times rise, or was the delay after the carrier picked up? / Which carriers serve RJ, and did their transit times change in November?
+
+Grounding check: passed
+
+---
+
+## late_pct · 2018-04
+
+**Late deliveries fell from 18.96% to 4.5% in April**
+
+After a very bad February and March, the late rate dropped by 14.46 points to 4.5%, an unusual improvement (z-score -3.04). RJ customers explain 25.5% of the recovery (their late rate fell from 34.49% to 4.83%), SP customers 22.5% and MG 15.3%. By seller location, SP sellers explain 80.1%: their late rate fell from 20.52% to 4.76%. The Northeast improved least, still at 19.44% late.
+
+- RJ customers: 34.49% → 4.83% late (25.5% of the improvement)
+- SP sellers: 20.52% → 4.76% late (80.1%)
+- Northeast customers still 19.44% late
+
+*Caveat:* The improvement is measured from the worst month in the data, so April is a return to normal rather than a new best.
+
+*Next:* What caused the February-March delays (carrier disruption, strikes, weather)? / Why did the Northeast recover much less than the Southeast?
+
+Grounding check: passed
+
+---
+
+## avg_review_score · 2017-11
+
+**Review score dropped to 3.95 in November as deliveries ran late**
+
+The average review score fell from 4.17 to 3.95, a fall of 0.22 points that is unusual (z-score -3.94). RJ customers explain 42.4% of the decline: their average fell from 4.18 to 3.62. By seller location, SP sellers explain 81.6% (4.14 to 3.89). By category, sports_leisure (36.8%) and cool_stuff (31.5%) contributed most, while electronics improved and offset 17.4%.
+
+- RJ customers: 4.18 → 3.62 (42.4% of the drop)
+- SP sellers: 4.14 → 3.89 (81.6%)
+- sports_leisure and cool_stuff: 36.8% and 31.5%
+
+*Caveat:* The same month and the same state (RJ) top the late-delivery change, which points to delivery problems, but review text would be needed to confirm it.
+
+*Next:* Is the score drop concentrated in late orders? / What did RJ customers write in November reviews?
+
+Grounding check: passed
+
+---
+
+## avg_review_score · 2018-04
+
+**Review score recovered to 4.17 in April as deliveries improved**
+
+The average review score rose from 3.76 to 4.17, a gain of 0.41 points and an unusual change (z-score 3.83). SP customers explain 38.3% of the improvement and RJ customers 21.8%; RJ's average jumped from 3.19 to 4.04. Orders from SP sellers explain 82.2% (3.7 to 4.16). watches_gifts (19.2%), housewares (18.4%) and health_beauty (14.5%) improved most, while computers_accessories moved the other way (-15.2%).
+
+- RJ customers: 3.19 → 4.04
+- SP sellers: 3.7 → 4.16 (82.2% of the gain)
+- watches_gifts: 3.71 → 4.26 (19.2%)
+
+*Caveat:* The recovery mirrors the drop in late deliveries the same month, which fits a delivery explanation, but it is a correlation in monthly totals.
+
+*Next:* Did review scores recover for on-time orders too, or only because fewer orders were late? / Why did computers_accessories ratings fall while others rose?
+
+Grounding check: passed
+
+---
+
