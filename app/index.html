@@ -30,6 +30,7 @@
   --bad-soft: #3a211d; --good-soft: #17322a; color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--body); }
 .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 48px; display: grid; gap: 18px; }
 header h1 { font-family: var(--display); font-weight: 600; font-size: 30px; margin: 0; text-wrap: balance; }
@@ -79,17 +80,50 @@ textarea { width: 100%; min-height: 64px; font: 14px var(--body); color: var(--i
 .answer { white-space: pre-wrap; margin-top: 10px; }
 .note { color: var(--muted); font-size: 13px; }
 footer { color: var(--muted); font-size: 12.5px; }
+.modes { gap: 0; } .modes button { border-radius: 0; } .modes button:first-child { border-radius: 999px 0 0 999px; } .modes button:last-child { border-radius: 0 999px 999px 0; }
+.drop { border: 2px dashed var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 10px; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop input[type=file] { font: 14px var(--body); color: var(--ink); }
+.ptable { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 12px; }
+.ptable th, .ptable td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ptable th { color: var(--muted); font-weight: 600; } .ptable td.n { font-family: var(--mono); text-align: right; } .ptable th.n { text-align: right; }
+.tag { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.tag.date { background: var(--good-soft); color: var(--up); } .tag.number { background: var(--warn-soft); color: var(--warn); } .tag.text { background: var(--line); color: var(--muted); }
+.form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 14px; }
+.form label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.form select { font: 14px var(--body); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
+.dims { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 14px; }
+.scroll { overflow-x: auto; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>Why did the metric move?</h1>
-    <p>Pick a metric and a month. SQL splits the change by region, category, seller and customer type; an AI analyst then explains it in plain English, and every number it uses is checked against the data. Olist marketplace, Brazil, Jan 2017 – Aug 2018. Built by Aarsh Mall.</p>
+    <p>Pick a metric and a period. The change is split exactly by region, category, seller or any column you choose; an AI analyst then explains it in plain English, and every number it uses is checked against the data. Explore the Olist demo or upload your own CSV. Built by Aarsh Mall.</p>
+    <div class="seg row modes" id="modeButtons" role="group" aria-label="Data source" style="margin-top:14px">
+      <button type="button" data-mode="demo">Olist demo data</button>
+      <button type="button" data-mode="custom">Analyze your own file</button>
+    </div>
   </header>
+
+  <section class="panel" id="upload" hidden>
+    <h2>Your data</h2>
+    <div class="drop" id="drop">
+      <div><b>Drop a CSV file here</b>, or choose one: <input type="file" id="file" accept=".csv,text/csv" aria-label="Choose a CSV file"></div>
+      <div class="note">One row per record (an order, a customer, a ticket…) with at least one date column. Numbers and categories are detected automatically.</div>
+      <div class="row"><span class="note">Or try a sample:</span>
+        <button type="button" class="btn ghost" data-sample="olist_orders_sample.csv">Olist orders (19K rows)</button>
+        <button type="button" class="btn ghost" data-sample="superstore_orders.csv">Superstore sales (10K rows)</button></div>
+      <div class="note">Privacy: the file is read inside this browser. When you ask the AI, it receives only period totals and top segments, not your rows.</div>
+      <div class="note" id="uploadStatus" role="status"></div>
+    </div>
+    <div id="profileBox"></div>
+  </section>
 
   <section class="panel" id="controls">
     <div class="row">
+      <strong id="customTitle" hidden></strong>
       <div class="seg row" id="metricButtons" role="group" aria-label="Metric">
         <button type="button" data-metric="revenue">Revenue</button>
         <button type="button" data-metric="orders">Orders</button>
@@ -130,23 +164,28 @@ footer { color: var(--muted); font-size: 12.5px; }
     <div id="askCheck"></div>
   </section>
 
-  <footer>Data: Olist Brazilian E-Commerce dataset (Kaggle). Metrics and contributions computed in PostgreSQL; explanations written by an LLM (Claude) from those numbers only.</footer>
+  <footer>Olist demo: Olist Brazilian E-Commerce dataset (Kaggle), computed in PostgreSQL. Your own files: computed in this browser with the same maths. Explanations are written by an LLM (Claude) from those numbers only.</footer>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="engine.js"></script>
 <script>
-const S = { metric: "revenue", month: "2017-11", dim: "Customer state", packets: {}, monthly: {}, saved: {}, live: {}, sample: null };
+const S = { mode: "demo", metric: "revenue", month: "2017-11", dim: "Customer state", packets: {}, monthly: {}, saved: {}, live: {}, sample: null,
+  up: null, custom: null, demoState: { metric: "revenue", month: "2017-11", dim: "Customer state" } };
 const LABEL = { revenue: "Revenue", orders: "Orders", late_pct: "Late deliveries", avg_review_score: "Review score" };
 const DIMS = ["Customer state", "Product category", "Seller state", "Customer region", "Payment type", "Customer type"];
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
 const nf0 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
-const fmtVal = (m, v) => v == null ? "—" : m === "revenue" ? "R$ " + nf0.format(v) : m === "orders" ? nf0.format(v)
+const nfG = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
+const fmtVal = (m, v) => v == null ? "—" : m === "custom" ? (Math.abs(v) >= 1000 ? nf0.format(v) : nfG.format(v)) : m === "revenue" ? "R$ " + nf0.format(v) : m === "orders" ? nf0.format(v)
   : m === "late_pct" ? v.toFixed(2) + "%" : v.toFixed(2);
 const fmtChg = (m, v) => { if (v == null) return "—"; const s = v > 0 ? "+" : v < 0 ? "−" : ""; const a = Math.abs(v);
-  return s + (m === "revenue" ? "R$ " + nf0.format(a) : m === "orders" ? nf0.format(a) : m === "late_pct" ? a.toFixed(2) + " pts" : a.toFixed(3)); };
-const isGood = (m, change) => (m === "late_pct" ? change < 0 : change > 0);
-const monthName = (ym) => new Date(ym + "-01T00:00:00Z").toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+  return s + (m === "custom" ? (a >= 1000 ? nf0.format(a) : nfG.format(a)) : m === "revenue" ? "R$ " + nf0.format(a) : m === "orders" ? nf0.format(a) : m === "late_pct" ? a.toFixed(2) + " pts" : a.toFixed(3)); };
+const isGood = (m, change) => (m === "custom" ? (S.custom && S.custom.better === "down" ? change < 0 : change > 0) : m === "late_pct" ? change < 0 : change > 0);
+const monthName = (ym) => /^\d{4}-\d{2}$/.test(ym) ? new Date(ym + "-01T00:00:00Z").toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }) : ym;
+const dimsNow = () => (S.mode === "custom" && S.custom ? S.custom.dims : DIMS);
 
 // ---------- grounding check (same rule as engine/explain.py)
 function allowedNumbers(obj) {
@@ -180,14 +219,15 @@ function drawChart() {
   const NS = "http://www.w3.org/2000/svg"; const mk = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
   for (let k = 0; k <= 3; k++) { const v = lo - pad + k * ((hi + pad) - (lo - pad)) / 3;
     svg.append(mk("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: "var(--line)" }));
-    const t = mk("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }); t.textContent = S.metric === "revenue" ? (v / 1e6).toFixed(2) + "M" : S.metric === "orders" ? nf0.format(v) : v.toFixed(S.metric === "late_pct" ? 0 : 1) + (S.metric === "late_pct" ? "%" : ""); svg.append(t); }
+    const t = mk("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }); t.textContent = S.metric === "custom" ? new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 }).format(v) : S.metric === "revenue" ? (v / 1e6).toFixed(2) + "M" : S.metric === "orders" ? nf0.format(v) : v.toFixed(S.metric === "late_pct" ? 0 : 1) + (S.metric === "late_pct" ? "%" : ""); svg.append(t); }
   const area = rows.map((r, i) => `${i ? "L" : "M"}${xs[i]},${y(r.value)}`).join("");
   svg.append(mk("path", { d: area + `L${xs.at(-1)},${H - m.b}L${xs[0]},${H - m.b}Z`, fill: "var(--accent-soft)", opacity: 0.7 }));
   svg.append(mk("path", { d: area, fill: "none", stroke: "var(--accent)", "stroke-width": 2 }));
   const step = Math.max(1, Math.ceil(rows.length / Math.max(2, Math.floor((W - m.l) / 70))));
   rows.forEach((r, i) => {
-    const ym = r.month.slice(0, 7); const p = S.packets[S.metric + "|" + ym];
+    const ym = S.metric === "custom" ? r.month : r.month.slice(0, 7); const p = S.packets[S.metric + "|" + ym];
     if (i % step === 0) { const t = mk("text", { x: xs[i], y: H - 6, "text-anchor": "middle" }); t.textContent = monthName(ym).replace(" 20", " ’"); svg.append(t); }
+    
     const sel = ym === S.month; const color = sel ? "var(--accent)" : p && p.is_unusual ? "var(--down)" : p && p.segment_alerts.length ? "var(--warn)" : "var(--panel)";
     const c = mk("circle", { cx: xs[i], cy: y(r.value), r: sel ? 7 : 5, fill: color, stroke: sel ? "var(--panel)" : "var(--accent)", "stroke-width": 2, tabindex: p ? 0 : -1, role: "button" });
     const tt = document.createElementNS(NS, "title"); tt.textContent = `${monthName(ym)}: ${fmtVal(S.metric, r.value)}`; c.append(tt);
@@ -211,21 +251,25 @@ function drawSummary(p) {
   const kv = el("dl", "kv");
   [["Previous month", fmtVal(S.metric, p.previous_value)], ["This month", fmtVal(S.metric, p.value)], ["Change", fmtChg(S.metric, p.change)]].forEach(([k, v]) => { kv.append(el("dt", null, k), el("dd", null, v)); });
   box.append(kv);
-  if (S.metric === "revenue") {
+  if (p.volume_effect != null) {
     const s = el("div", "split"); const tot = Math.abs(p.volume_effect) + Math.abs(p.value_effect) || 1;
-    s.append(el("div", null, "Split of the revenue change"));
+    s.append(el("div", null, S.metric === "custom" ? "Split of the change" : "Split of the revenue change"));
     const bar = el("div", "bar"); const a = el("span"); a.style.width = (100 * Math.abs(p.volume_effect) / tot) + "%"; a.style.background = "var(--accent)";
     const b = el("span"); b.style.width = (100 * Math.abs(p.value_effect) / tot) + "%"; b.style.background = "var(--warn)"; bar.append(a, b); s.append(bar);
-    s.append(el("div", "note", `Number of orders: ${fmtChg("revenue", p.volume_effect)} · Order size (avg R$ ${p.previous_average_order_value} → R$ ${p.average_order_value}): ${fmtChg("revenue", p.value_effect)}`));
+    s.append(el("div", "note", S.metric === "custom" ? `Number of rows (${nf0.format(p.previous_rows)} → ${nf0.format(p.rows)}): ${fmtChg("custom", p.volume_effect)} · Value per row: ${fmtChg("custom", p.value_effect)}`
+      : `Number of orders: ${fmtChg("revenue", p.volume_effect)} · Order size (avg R$ ${p.previous_average_order_value} → R$ ${p.average_order_value}): ${fmtChg("revenue", p.value_effect)}`));
     box.append(s);
   }
 }
-function prevMonth(ym) { const d = new Date(ym + "-01T00:00:00Z"); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); }
+function prevMonth(ym) {
+  if (S.metric === "custom") { const ps = S.custom.periods; return ps[ps.indexOf(ym) - 1] || ""; }
+  const d = new Date(ym + "-01T00:00:00Z"); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); }
 
 // ---------- drivers
 function drawDrivers(p) {
   const tabs = $("dimTabs"); tabs.replaceChildren();
-  DIMS.forEach((d) => { const b = el("button", null, d); b.type = "button"; b.setAttribute("aria-pressed", String(d === S.dim)); b.addEventListener("click", () => { S.dim = d; drawDrivers(p); }); tabs.append(b); });
+  if (!dimsNow().includes(S.dim)) S.dim = dimsNow()[0];
+  dimsNow().forEach((d) => { const b = el("button", null, d); b.type = "button"; b.setAttribute("aria-pressed", String(d === S.dim)); b.addEventListener("click", () => { S.dim = d; drawDrivers(p); }); tabs.append(b); });
   const list = $("drvList"); list.replaceChildren();
   if (!p || !p.drivers[S.dim]) { list.append(el("p", "note", "No breakdown for this month.")); return; }
   const d = p.drivers[S.dim]; const all = [...d.pushed_with_the_change, ...d.pushed_against_the_change];
@@ -237,7 +281,7 @@ function drawDrivers(p) {
       const tr = el("div", "track"); const f = el("div", "fill"); f.style.width = (100 * Math.abs(x.contribution) / max) + "%"; f.style.left = "0";
       f.style.background = isGood(S.metric, x.contribution) ? "var(--up)" : "var(--down)"; tr.append(f); list.append(tr);
       list.append(el("div", "num", `${fmtChg(S.metric, x.contribution)} · ${x.share_of_change_pct}%`));
-      const before = S.metric === "late_pct" ? `late rate ${x.segment_value_before ?? "—"}% → ${x.segment_value_now ?? "—"}%` : S.metric === "avg_review_score" ? `avg ${x.segment_value_before ?? "—"} → ${x.segment_value_now ?? "—"} stars` : `${fmtVal(S.metric, x.segment_value_before)} → ${fmtVal(S.metric, x.segment_value_now)}`;
+      const before = S.metric === "custom" ? `${S.custom.agg === "mean" ? "average " : ""}${fmtVal("custom", x.segment_value_before)} → ${fmtVal("custom", x.segment_value_now)}` : S.metric === "late_pct" ? `late rate ${x.segment_value_before ?? "—"}% → ${x.segment_value_now ?? "—"}%` : S.metric === "avg_review_score" ? `avg ${x.segment_value_before ?? "—"} → ${x.segment_value_now ?? "—"} stars` : `${fmtVal(S.metric, x.segment_value_before)} → ${fmtVal(S.metric, x.segment_value_now)}`;
       list.append(el("div", "sub", before + (x.segment_z_score != null && Math.abs(x.segment_z_score) >= 4 ? ` · unusual for this segment (z = ${x.segment_z_score})` : "")));
     });
   };
@@ -246,14 +290,14 @@ function drawDrivers(p) {
 }
 
 // ---------- AI explanation
-const SYSTEM = `You are a senior data analyst at an e-commerce marketplace. You explain why a business metric changed from one month to the next, for managers who do not read SQL.
+const SYSTEM = `You are a senior data analyst. You explain why a business metric changed from one period (usually a month) to the next, for managers who do not read SQL.
 You receive one JSON "insight packet": the metric, its change, a z_score (how unusual the change is compared with the previous 6 monthly changes; |z| >= 2 is unusual), segment_alerts (segments whose own move was unusual) and, for several dimensions, the segments that pushed the metric with or against the change. A segment's "contribution" is its exact part of the total change; contributions within one dimension add up to the total. For late_pct and avg_review_score, contribution is in percentage points or score points and segment_value_now/before is the segment's own rate.
 Rules:
 - Use ONLY numbers that appear in the packet. Do not compute new totals, averages or percentages. You may round, but write numbers in full (R$ 87,864, not R$ 88K).
 - Name the 2-3 segments that explain most of the change, with their share_of_change_pct. Prefer customer state, product category and seller state; customer type and payment type have few segments, so mention them only when notable.
 - Do not add shares across dimensions (they overlap).
 - Say whether the change is unusual using the z_score, in plain words; if segment_alerts is not empty, mention that segment.
-- For revenue, say whether it came from the number of orders (volume_effect) or order size (value_effect).
+- If volume_effect and value_effect are present, say whether the change came from the number of orders/rows (volume_effect) or the size of each (value_effect).
 - Describe what the data shows; do not claim causes the data cannot show. Suggest checks instead.
 - Plain business English, no markdown.
 Return ONLY a JSON object: {"headline": string (max 14 words), "explanation": string (3-5 sentences), "key_drivers": [2-3 short strings], "caveat": string, "next_questions": [2 strings]}.`;
@@ -263,7 +307,7 @@ function drawAI(p) {
   const key = S.metric + "|" + S.month; const ans = S.live[key] || S.saved[key];
   if (!p) return;
   if (!ans) {
-    body.append(el("p", "note", S.sample ? "No explanation yet for this month. Ask the AI analyst: it reads the numbers above and explains them." : "Saved explanations exist for the 9 unusual months (red dots). Live explanations work when this page is opened in Claude."));
+    body.append(el("p", "note", S.metric === "custom" ? (S.sample ? "Click the button and the AI analyst explains this change from the numbers above." : "Live AI explanations work when this page is opened in Claude.") : S.sample ? "No explanation yet for this month. Ask the AI analyst: it reads the numbers above and explains them." : "Saved explanations exist for the 9 unusual months (red dots). Live explanations work when this page is opened in Claude."));
   } else {
     body.append(el("span", "src", S.live[key] ? "Written live by Claude just now" : "Saved explanation (written by Claude)"));
     body.append(el("h3", null, ans.headline)); body.append(el("p", null, ans.explanation));
@@ -281,7 +325,8 @@ async function explainLive() {
   const p = S.packets[S.metric + "|" + S.month]; if (!p || !S.sample) return;
   const btn = $("explainBtn"), st = $("aiStatus"); btn.disabled = true; st.textContent = "The AI analyst is reading the numbers…";
   try {
-    const ans = await S.sample.json([{ role: "user", content: SYSTEM + "\n\nInsight packet:\n" + JSON.stringify(p) }], { modelTier: "default", cache: false });
+    const ctx = S.metric === "custom" ? `\n\nThe data comes from the user's file "${S.custom.file}"; the metric is ${S.custom.label}, by ${S.custom.periodName}.` : "\n\nThe data is from the Olist e-commerce marketplace in Brazil.";
+    const ans = await S.sample.json([{ role: "user", content: SYSTEM + ctx + "\n\nInsight packet:\n" + JSON.stringify(p) }], { modelTier: "default", cache: false });
     if (!ans || !ans.headline) throw { message: "The answer was not in the expected format. Try again." };
     S.live[S.metric + "|" + S.month] = ans; st.textContent = ""; drawAI(p);
   } catch (e) {
@@ -299,15 +344,16 @@ async function ask() {
   const seen = [];
   const tools = [
     { name: "list_months", description: "Monthly values, % change, z_score and alerts for one metric (revenue, orders, late_pct, avg_review_score).",
-      inputSchema: { type: "object", properties: { metric: { type: "string", enum: Object.keys(LABEL) } }, required: ["metric"] },
-      execute: ({ metric }) => { const r = (S.monthly[metric] || []).map((x) => { const p = S.packets[metric + "|" + x.month.slice(0, 7)];
-        return { month: x.month.slice(0, 7), value: x.value, change_pct: x.change_pct, z_score: x.z_score, is_unusual: p ? p.is_unusual : false, alerts: p ? p.segment_alerts.map((a) => a.segment) : [] }; }); seen.push(r); return r; } },
+      inputSchema: { type: "object", properties: { metric: { type: "string", enum: Object.keys(S.monthly) } }, required: ["metric"] },
+      execute: ({ metric }) => { const r = (S.monthly[metric] || []).map((x) => { const key = metric === "custom" ? x.month : x.month.slice(0, 7); const p = S.packets[metric + "|" + key];
+        return { month: key, value: x.value, change_pct: x.change_pct, z_score: x.z_score, is_unusual: p ? p.is_unusual : false, alerts: p ? p.segment_alerts.map((a) => a.segment) : [] }; }); seen.push(r); return r; } },
     { name: "get_drivers", description: "Full insight packet (change, z_score, top segments by dimension with contribution and share_of_change_pct) for one metric and month (YYYY-MM).",
-      inputSchema: { type: "object", properties: { metric: { type: "string", enum: Object.keys(LABEL) }, month: { type: "string" } }, required: ["metric", "month"] },
+      inputSchema: { type: "object", properties: { metric: { type: "string", enum: Object.keys(S.monthly) }, month: { type: "string" } }, required: ["metric", "month"] },
       execute: ({ metric, month }) => { const p = S.packets[metric + "|" + month]; if (!p) throw new Error("No data for " + metric + " " + month); seen.push(p); return p; } },
   ];
   try {
-    const res = await S.sample([{ role: "user", content: "You answer questions about an e-commerce marketplace (Olist, Brazil, Jan 2017 - Aug 2018) using the tools, which return numbers computed in SQL. Use only numbers returned by the tools; do not calculate new ones. Contributions inside one dimension add up to the change. Answer in under 150 words, plain English, no markdown tables.\n\nQuestion: " + q }],
+    const about = S.mode === "custom" ? `the user's uploaded file "${S.custom.file}" (metric "custom" = ${S.custom.label}, by ${S.custom.periodName}; periods are named like ${S.custom.periods[1]})` : "an e-commerce marketplace (Olist, Brazil, Jan 2017 - Aug 2018; metrics revenue, orders, late_pct, avg_review_score)";
+    const res = await S.sample([{ role: "user", content: "You answer questions about " + about + " using the tools, which return pre-computed numbers. Use only numbers returned by the tools; do not calculate new ones. Contributions inside one dimension add up to the change. Answer in under 150 words, plain English, no markdown tables.\n\nQuestion: " + q }],
       { tools, modelTier: "default", cache: false, onText: ({ text }) => { out.textContent = text; } });
     out.textContent = res.text; st.textContent = "";
     const bad = ungrounded(res.text, seen);
@@ -320,10 +366,88 @@ async function ask() {
 }
 
 function render() {
+  document.querySelectorAll("#modeButtons button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === S.mode)));
   document.querySelectorAll("#metricButtons button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.metric === S.metric)));
+  const custom = S.mode === "custom", ready = !custom || !!S.custom;
+  $("upload").hidden = !custom;
+  $("metricButtons").hidden = custom; $("customTitle").hidden = !custom;
+  if (custom && S.custom) $("customTitle").textContent = `${S.custom.label} by ${S.custom.periodName} · ${S.custom.file}`;
+  ["controls", "ai"].forEach((id) => { $(id).hidden = !ready; });
+  document.querySelector(".grid2").hidden = !ready;
+  $("ask").hidden = !S.sample || !ready;
+  if (!ready) return;
   const p = S.packets[S.metric + "|" + S.month];
   drawChart(); drawSummary(p); drawDrivers(p); drawAI(p);
-  $("ask").hidden = !S.sample;
+}
+
+// ---------- your own data
+function setStatus(t) { $("uploadStatus").textContent = t; }
+function loadCSV(text, name) {
+  const res = Papa.parse(text, { header: true, skipEmptyLines: true });
+  if (!res.data.length || !res.meta.fields || res.meta.fields.length < 2) { setStatus("Couldn't read that file as a table. Check it is a CSV with a header row."); return; }
+  S.up = { rows: res.data, cols: res.meta.fields.filter((c) => c && c.trim()), name };
+  S.up.prof = Engine.profile(S.up.rows, S.up.cols);
+  setStatus(`Loaded ${nf0.format(S.up.rows.length)} rows and ${S.up.cols.length} columns from ${name}.`);
+  drawProfile();
+}
+function drawProfile() {
+  const box = $("profileBox"); box.replaceChildren();
+  const prof = S.up.prof;
+  const wrap = el("div", "scroll"); const t = el("table", "ptable");
+  const hr = t.createTHead().insertRow(); ["Column", "Detected as", "Missing", "Distinct", "Details"].forEach((h) => { const th = el("th", h === "Missing" || h === "Distinct" ? "n" : null, h); hr.append(th); });
+  const tb = t.createTBody();
+  prof.forEach((c) => { const r = tb.insertRow();
+    r.insertCell().textContent = c.column;
+    const tc = r.insertCell(); tc.append(el("span", "tag " + c.type, c.type));
+    const m = r.insertCell(); m.className = "n"; m.textContent = c.missing_pct + "%";
+    const d = r.insertCell(); d.className = "n"; d.textContent = nf0.format(c.distinct);
+    r.insertCell().textContent = c.type === "number" ? `min ${nfG.format(c.min)} · avg ${nfG.format(c.mean)} · max ${nfG.format(c.max)}` : c.type === "date" ? `${c.min} to ${c.max}` : (c.top_values || []).join(", ");
+  });
+  wrap.append(t); box.append(el("h2", null, "What's in the file")); box.append(wrap);
+
+  const dates = prof.filter((c) => c.type === "date"), nums = prof.filter((c) => c.type === "number"), cats = prof.filter((c) => c.type === "category" && c.distinct >= 2);
+  if (!dates.length) { box.append(el("p", "note", "No date column found. The analysis needs a date for every row (e.g. 2024-03-15 or 3/15/2024).")); return; }
+  const f = el("div", "form");
+  const sel = (id, label, opts, val) => { const l = el("label", null, label); l.htmlFor = id; const s = el("select"); s.id = id;
+    opts.forEach(([v, t]) => { const o = new Option(t, v); s.append(o); }); if (val != null) s.value = val; l.append(s); f.append(l); return s; };
+  sel("upDate", "Date column", dates.map((c) => [c.column, c.column]));
+  const defMetric = nums.find((c) => /sales|revenue|amount|value|price|total|profit/i.test(c.column)) || nums[0];
+  sel("upMetric", "Metric", [["rows", "Number of rows (count)"], ...nums.map((c) => [c.column, c.column])], defMetric ? defMetric.column : "rows");
+  sel("upAgg", "Combine values by", [["sum", "Sum"], ["mean", "Average"]], "sum");
+  const span = dates[0].max && dates[0].min ? (Date.parse(dates[0].max) - Date.parse(dates[0].min)) / 86400000 : 400;
+  sel("upPeriod", "Period", [["M", "Month"], ["W", "Week"], ["Q", "Quarter"]], span < 150 ? "W" : "M");
+  sel("upBetter", "An increase is", [["up", "Good (e.g. sales)"], ["down", "Bad (e.g. complaints, costs)"]], "up");
+  const h = el("h2", null, "Analysis settings"); h.style.marginTop = "16px"; box.append(h, f);
+  box.append(el("div", "note", "Break down by (up to 6; columns with 2-100 different values):"));
+  const dw = el("div", "dims");
+  cats.filter((c) => c.distinct <= 100).forEach((c, i) => { const l = el("label"); const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = c.column; cb.checked = i < 6; cb.id = "dim-" + i;
+    l.htmlFor = cb.id; l.append(cb, document.createTextNode(" " + c.column + ` (${c.distinct})`)); dw.append(l); });
+  box.append(dw);
+  const go = el("button", "btn", "Analyze"); go.type = "button"; go.style.marginTop = "12px"; go.addEventListener("click", runCustom); box.append(go);
+}
+function runCustom() {
+  const dims = [...document.querySelectorAll("#profileBox .dims input:checked")].map((c) => c.value).slice(0, 6);
+  const metric = $("upMetric").value, agg = metric === "rows" ? "count" : $("upAgg").value, period = $("upPeriod").value;
+  if (!dims.length) { setStatus("Pick at least one column to break down by."); return; }
+  const res = Engine.analyze(S.up.rows, { date: $("upDate").value, metric, agg, dims, period, better: $("upBetter").value });
+  if (res.packets.length < 2) { setStatus("Need at least 3 periods of data to compare. Try a shorter period (e.g. Week)."); return; }
+  Object.keys(S.packets).filter((k) => k.startsWith("custom|")).forEach((k) => delete S.packets[k]);
+  Object.keys(S.live).filter((k) => k.startsWith("custom|")).forEach((k) => delete S.live[k]);
+  res.packets.forEach((p) => { S.packets["custom|" + p.month] = p; });
+  S.monthly.custom = res.series; LABEL.custom = res.label;
+  S.custom = { dims, label: res.label, periods: res.periods, file: S.up.name, agg, better: $("upBetter").value, periodName: { M: "month", W: "week", Q: "quarter" }[period] };
+  const unusual = res.packets.filter((p) => p.is_unusual);
+  S.metric = "custom"; S.dim = dims[0]; S.month = (unusual.at(-1) || res.packets.at(-1)).month;
+  setStatus(`Analyzed ${nf0.format(res.rowsUsed)} rows over ${res.periods.length} ${S.custom.periodName}s. ${unusual.length} unusual change(s) found${unusual.length ? " (red dots); showing the latest." : "."}`);
+  render(); $("controls").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}
+function setMode(mode) {
+  if (mode === S.mode) return;
+  if (S.mode === "demo") S.demoState = { metric: S.metric, month: S.month, dim: S.dim };
+  S.mode = mode;
+  if (mode === "demo") Object.assign(S, S.demoState);
+  else if (S.custom) { S.metric = "custom"; S.month = S.packets["custom|" + S.month] ? S.month : S.custom.periods.at(-1); S.dim = S.custom.dims[0]; }
+  render();
 }
 
 async function init() {
@@ -334,6 +458,14 @@ async function init() {
   document.querySelectorAll("#metricButtons button").forEach((b) => b.addEventListener("click", () => {
     S.metric = b.dataset.metric; if (!S.packets[S.metric + "|" + S.month]) S.month = "2017-11"; render(); }));
   $("explainBtn").addEventListener("click", explainLive);
+  document.querySelectorAll("#modeButtons button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
+  $("file").addEventListener("change", (e) => { const f = e.target.files[0]; if (f) f.text().then((t) => loadCSV(t, f.name)); });
+  const drop = $("drop");
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) f.text().then((t) => loadCSV(t, f.name)); });
+  document.querySelectorAll("[data-sample]").forEach((b) => b.addEventListener("click", () => {
+    setStatus("Loading sample…"); fetch("data/samples/" + b.dataset.sample).then((r) => r.text()).then((t) => loadCSV(t, b.dataset.sample)).catch(() => setStatus("Couldn't load the sample.")); }));
   $("askBtn").addEventListener("click", ask);
   window.addEventListener("resize", () => drawChart());
   render();

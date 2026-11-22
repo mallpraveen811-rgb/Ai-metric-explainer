@@ -20,8 +20,8 @@ import re
 
 from common import DATA, LLM, RESULTS
 
-SYSTEM = """You are a senior data analyst at an e-commerce marketplace. You explain why a business
-metric changed from one month to the next, for managers who do not read SQL.
+SYSTEM = """You are a senior data analyst. You explain why a business metric changed from one period
+(usually a month) to the next, for managers who do not read SQL.
 
 You receive one JSON "insight packet" with the metric, its change, a z_score (how unusual the
 change is compared with the previous 6 monthly changes; |z| >= 2 is unusual) and, for several
@@ -39,7 +39,8 @@ Rules:
 - Do not add shares across dimensions (they overlap).
 - Say whether the change is unusual using the z_score, in plain words. If segment_alerts is not empty, also
   mention the segment whose own move was unusual (segment_z_score), even when the total looks normal.
-- For revenue, say whether it came from the number of orders (volume_effect) or order size (value_effect).
+- If volume_effect and value_effect are present, say whether the change came from the number of orders/rows
+  (volume_effect) or the size of each (value_effect).
 - Describe what the data shows; do not claim causes the data cannot show. Suggest checks instead.
 - Plain business English, no markdown."""
 
@@ -62,7 +63,7 @@ def allowed_numbers(obj):
 
     def add(x):
         x = abs(float(x))
-        for d in (0, 1, 2):
+        for d in (0, 1, 2, 3, 4):
             found.add(f"{round(x, d):.{d}f}")
         found.add(str(int(x)))
 
@@ -102,7 +103,8 @@ def ungrounded(text, packet):
 # ------------------------------------------------------------------ template baseline (no AI)
 def template(p):
     direction = "rose" if p["change"] > 0 else "fell"
-    dim = next(k for k in ("Customer state", "Product category", "Seller state") if k in p["drivers"])
+    dim = next((k for k in ("Customer state", "Product category", "Seller state") if k in p["drivers"]),
+               next(iter(p["drivers"])))
     d = p["drivers"][dim]
     top = d["pushed_with_the_change"][0]
     return {

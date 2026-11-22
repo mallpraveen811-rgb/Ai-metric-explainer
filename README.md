@@ -85,6 +85,25 @@ the total looks normal.
 
 ---
 
+## Analyze your own data (any CSV)
+
+The same analysis works on any file with one row per record and a date column: orders, customers, support tickets, expenses.
+
+**In the browser:** open the live demo → **Analyze your own file** → drop a CSV (or try the Olist / Superstore samples).
+The page profiles every column (date, number, category, text; missing values; distinct values), lets you pick the metric
+(sum or average of a column, or a row count), the period (month / week / quarter), whether up is good or bad, and up to
+6 breakdown columns, then shows unusual periods, the drivers of each change and the AI explanation.
+The file is processed in the browser; the AI only receives period totals and top segments.
+
+**From the command line (pandas, no database):**
+```bash
+python engine/analyze_csv.py samples/superstore_orders.csv --metric Sales
+python engine/analyze_csv.py samples/superstore_orders.csv --metric Profit --explain
+python engine/analyze_csv.py my_tickets.csv --metric rows --period W --better down
+```
+`app/engine.js` (browser) and `engine/analyze_csv.py` (Python) implement the same maths; on both samples they produce
+identical changes, z-scores and top drivers for every period (checked automatically).
+
 ## Run it
 
 Requirements: PostgreSQL with the Olist star schema (run `sql/00`–`sql/04` from the Complaint Cost Engine repo first), Python 3.10+.
@@ -106,9 +125,10 @@ Tests without a database or API key: `python tests/mock_llm.py`
 ## Project layout
 ```
 sql/        01 order facts · 02 monthly metrics + z-scores · 03 driver decomposition
-engine/     build_packets.py · explain.py (LLM + grounding check) · common.py (psql + LLM clients)
+engine/     build_packets.py · explain.py (LLM + grounding check) · analyze_csv.py (any CSV) · common.py
 tests/      planted_anomalies.py · mock_llm.py
-app/        live page (runs as a Claude artifact; the AI calls use Claude)
+app/        live page (runs as a Claude artifact; the AI calls use Claude) · engine.js (browser analysis of uploaded files)
+samples/    Olist orders sample and Superstore sales, for trying the upload feature
 data/       insight packets and monthly metrics (generated)
 results/    example explanations, planted-anomaly test results
 docs/       project report
