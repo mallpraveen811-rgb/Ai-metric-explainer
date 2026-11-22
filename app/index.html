@@ -75,6 +75,10 @@ h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: v
 .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
 .btn:disabled { opacity: .55; cursor: progress; }
 .check { font-size: 13px; padding: 6px 10px; border-radius: 6px; margin-top: 6px; display: inline-block; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+footer a, .keybox a { color: var(--accent); }
+.keybox { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 8px; font-size: 13.5px; }
+.keybox input { font: 14px var(--mono); padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; min-width: 260px; flex: 1; background: var(--panel); color: var(--ink); }
 .check.ok { background: var(--good-soft); color: var(--up); } .check.bad { background: var(--bad-soft); color: var(--down); }
 textarea { width: 100%; min-height: 64px; font: 14px var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; resize: vertical; }
 .answer { white-space: pre-wrap; margin-top: 10px; }
@@ -153,6 +157,12 @@ footer { color: var(--muted); font-size: 12.5px; }
       <button type="button" class="btn" id="explainBtn">Explain this change with AI</button>
       <span class="note" id="aiStatus"></span>
     </div>
+    <div class="keybox" id="keybox" hidden>
+      <div><b>Turn on live AI:</b> paste a free Google Gemini API key (<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">get one here</a>). It is kept only in this browser tab and sent only to Google.</div>
+      <div class="row"><label for="gkey" class="sr-only">Gemini API key</label><input id="gkey" type="password" autocomplete="off" placeholder="Gemini API key">
+        <button type="button" class="btn ghost" id="gkeyBtn">Use key</button><span class="note" id="gkeyStatus"></span></div>
+    </div>
+    <div class="row" id="keyOn" hidden style="margin-top:8px"><span class="note">Live AI: Google Gemini (your key, this tab only)</span><button type="button" class="btn ghost" id="gkeyOff">Remove key</button></div>
   </section>
 
   <section class="panel" id="ask">
@@ -164,7 +174,7 @@ footer { color: var(--muted); font-size: 12.5px; }
     <div id="askCheck"></div>
   </section>
 
-  <footer>Olist demo: Olist Brazilian E-Commerce dataset (Kaggle), computed in PostgreSQL. Your own files: computed in this browser with the same maths. Explanations are written by an LLM (Claude) from those numbers only.</footer>
+  <footer>Olist demo: Olist Brazilian E-Commerce dataset (Kaggle), computed in PostgreSQL. Your own files: computed in this browser with the same maths. Explanations are written by an LLM (Claude or Gemini) from those numbers only. Code: <a href="https://github.com/mallpraveen811-rgb/Ai-metric-explainer">github.com/mallpraveen811-rgb/Ai-metric-explainer</a></footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -302,14 +312,42 @@ Rules:
 - Plain business English, no markdown.
 Return ONLY a JSON object: {"headline": string (max 14 words), "explanation": string (3-5 sentences), "key_drivers": [2-3 short strings], "caveat": string, "next_questions": [2 strings]}.`;
 
+// ---------- AI provider: Claude when the page runs inside Claude, otherwise Gemini with the visitor's own key
+const GEMINI_MODEL = "gemini-3.5-flash-lite";
+const aiOn = () => !!(S.sample || S.gkey);
+const aiName = () => (S.sample ? "Claude" : "Gemini");
+async function gemini(prompt, asJson) {
+  let r;
+  try {
+    r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+      method: "POST", headers: { "x-goog-api-key": S.gkey, "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: asJson ? { responseMimeType: "application/json" } : {} }) });
+  } catch (e) { throw { message: "Couldn't reach Gemini. Check your connection." }; }
+  if (r.status === 429) throw { code: "rate_limited" };
+  if (r.status === 400 || r.status === 401 || r.status === 403) throw { code: "bad_key", message: `Gemini refused the request (${r.status}). Check the API key.` };
+  if (!r.ok) throw { message: `Gemini error ${r.status}. Try again.` };
+  const j = await r.json();
+  return ((j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || []).filter((x) => !x.thought).map((x) => x.text || "").join("");
+}
+async function aiJSON(prompt) {
+  if (S.sample) return S.sample.json([{ role: "user", content: prompt }], { modelTier: "default", cache: false });
+  const t = await gemini(prompt, true);
+  try { return JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1)); } catch (e) { throw { message: "The answer was not in the expected format. Try again." }; }
+}
+function setKey(k) {
+  S.gkey = k || null;
+  try { if (k) sessionStorage.setItem("gkey", k); else sessionStorage.removeItem("gkey"); } catch (e) {}
+  render();
+}
+
 function drawAI(p) {
   const body = $("aiBody"); body.replaceChildren();
   const key = S.metric + "|" + S.month; const ans = S.live[key] || S.saved[key];
   if (!p) return;
   if (!ans) {
-    body.append(el("p", "note", S.metric === "custom" ? (S.sample ? "Click the button and the AI analyst explains this change from the numbers above." : "Live AI explanations work when this page is opened in Claude.") : S.sample ? "No explanation yet for this month. Ask the AI analyst: it reads the numbers above and explains them." : "Saved explanations exist for the 9 unusual months (red dots). Live explanations work when this page is opened in Claude."));
+    body.append(el("p", "note", S.metric === "custom" ? (aiOn() ? "Click the button and the AI analyst explains this change from the numbers above." : "Turn on live AI below to get an explanation of this change.") : aiOn() ? "No explanation yet for this month. Ask the AI analyst: it reads the numbers above and explains them." : "Saved AI explanations exist for the 9 unusual months (red dots). Turn on live AI below to explain any other month."));
   } else {
-    body.append(el("span", "src", S.live[key] ? "Written live by Claude just now" : "Saved explanation (written by Claude)"));
+    body.append(el("span", "src", S.live[key] ? `Written live by ${S.live[key]._by} just now` : "Saved AI explanation (model: Claude)"));
     body.append(el("h3", null, ans.headline)); body.append(el("p", null, ans.explanation));
     const ul = el("ul"); (ans.key_drivers || []).forEach((k) => ul.append(el("li", null, k))); body.append(ul);
     body.append(el("p", "meta", "Caveat: " + ans.caveat));
@@ -318,19 +356,21 @@ function drawAI(p) {
     const bad = ungrounded(text, p); const nums = (text.replace(/\b\d{4}-\d{2}\b/g, "").match(/\d[\d,]*(?:\.\d+)?/g) || []).length;
     body.append(el("span", "check " + (bad.length ? "bad" : "ok"), bad.length ? `Grounding check: ${bad.length} number(s) not found in the data: ${bad.join(", ")}` : `Grounding check passed: all ${nums} numbers come from the data`));
   }
-  const btn = $("explainBtn"); btn.hidden = !S.sample; btn.textContent = ans ? "Ask the AI again (live)" : "Explain this change with AI";
+  const btn = $("explainBtn"); btn.hidden = !aiOn(); btn.textContent = ans ? "Ask the AI again (live)" : "Explain this change with AI";
 }
 
 async function explainLive() {
-  const p = S.packets[S.metric + "|" + S.month]; if (!p || !S.sample) return;
+  const p = S.packets[S.metric + "|" + S.month]; if (!p || !aiOn()) return;
   const btn = $("explainBtn"), st = $("aiStatus"); btn.disabled = true; st.textContent = "The AI analyst is reading the numbers…";
   try {
     const ctx = S.metric === "custom" ? `\n\nThe data comes from the user's file "${S.custom.file}"; the metric is ${S.custom.label}, by ${S.custom.periodName}.` : "\n\nThe data is from the Olist e-commerce marketplace in Brazil.";
-    const ans = await S.sample.json([{ role: "user", content: SYSTEM + ctx + "\n\nInsight packet:\n" + JSON.stringify(p) }], { modelTier: "default", cache: false });
+    const ans = await aiJSON(SYSTEM + ctx + "\n\nInsight packet:\n" + JSON.stringify(p));
     if (!ans || !ans.headline) throw { message: "The answer was not in the expected format. Try again." };
+    ans._by = aiName();
     S.live[S.metric + "|" + S.month] = ans; st.textContent = ""; drawAI(p);
   } catch (e) {
     if (e && e.code === "not_granted") { S.sample = null; st.textContent = "Live AI is turned off for this page."; drawAI(p); }
+    else if (e && e.code === "bad_key") st.textContent = e.message;
     else if (e && e.code === "rate_limited") st.textContent = "Too many requests right now. Wait a minute and try again.";
     else st.textContent = (e && e.message) || "Something went wrong. Try again.";
   } finally { btn.disabled = false; }
@@ -338,7 +378,7 @@ async function explainLive() {
 
 // ---------- ask the data (Claude calls page functions as tools)
 async function ask() {
-  const q = $("question").value.trim(); if (!q || !S.sample) return;
+  const q = $("question").value.trim(); if (!q || !aiOn()) return;
   const btn = $("askBtn"), st = $("askStatus"), out = $("answer"), chk = $("askCheck");
   btn.disabled = true; st.textContent = "Thinking…"; out.textContent = ""; chk.replaceChildren();
   const seen = [];
@@ -353,6 +393,18 @@ async function ask() {
   ];
   try {
     const about = S.mode === "custom" ? `the user's uploaded file "${S.custom.file}" (metric "custom" = ${S.custom.label}, by ${S.custom.periodName}; periods are named like ${S.custom.periods[1]})` : "an e-commerce marketplace (Olist, Brazil, Jan 2017 - Aug 2018; metrics revenue, orders, late_pct, avg_review_score)";
+    const rules = " Use only numbers returned by the tools; do not calculate new ones. Contributions inside one dimension add up to the change. Answer in under 150 words, plain English, no markdown tables.";
+    if (!S.sample) {
+      const data = {}; Object.keys(S.monthly).filter((m) => (S.mode === "custom") === (m === "custom")).forEach((m) => { data[m] = tools[0].execute({ metric: m }); });
+      const cur = S.packets[S.metric + "|" + S.month]; if (cur) seen.push(cur);
+      const prompt = "You answer questions about " + about + ". Below are pre-computed numbers: the series for each metric and the full driver breakdown for the period on screen (" + S.metric + " " + S.month + ")." + rules.replace("returned by the tools", "given below") +
+        " If the question needs a breakdown for another period, say the user should select that period on the chart and ask again.\n\nSeries:\n" + JSON.stringify(data) + "\n\nBreakdown for the period on screen:\n" + JSON.stringify(cur || {}) + "\n\nQuestion: " + q;
+      const text = await gemini(prompt, false);
+      out.textContent = text; st.textContent = "";
+      const bad = ungrounded(text, seen);
+      chk.append(el("span", "check " + (bad.length ? "bad" : "ok"), bad.length ? `Grounding check: ${bad.join(", ")} not found in the data given to the AI` : "Grounding check passed: every number came from the data given to the AI"));
+      return;
+    }
     const res = await S.sample([{ role: "user", content: "You answer questions about " + about + " using the tools, which return pre-computed numbers. Use only numbers returned by the tools; do not calculate new ones. Contributions inside one dimension add up to the change. Answer in under 150 words, plain English, no markdown tables.\n\nQuestion: " + q }],
       { tools, modelTier: "default", cache: false, onText: ({ text }) => { out.textContent = text; } });
     out.textContent = res.text; st.textContent = "";
@@ -360,6 +412,7 @@ async function ask() {
     chk.append(el("span", "check " + (bad.length ? "bad" : "ok"), bad.length ? `Grounding check: ${bad.join(", ")} not found in the data the AI looked up` : "Grounding check passed: every number came from the data the AI looked up"));
   } catch (e) {
     if (e && e.code === "not_granted") { S.sample = null; st.textContent = "Live AI is turned off for this page."; render(); }
+    else if (e && e.code === "bad_key") st.textContent = e.message;
     else if (e && e.code === "rate_limited") st.textContent = "Too many requests right now. Wait a minute and try again.";
     else st.textContent = (e && e.message) || "Something went wrong. Try again.";
   } finally { btn.disabled = false; }
@@ -374,7 +427,8 @@ function render() {
   if (custom && S.custom) $("customTitle").textContent = `${S.custom.label} by ${S.custom.periodName} · ${S.custom.file}`;
   ["controls", "ai"].forEach((id) => { $(id).hidden = !ready; });
   document.querySelector(".grid2").hidden = !ready;
-  $("ask").hidden = !S.sample || !ready;
+  $("ask").hidden = !aiOn() || !ready;
+  $("keybox").hidden = !!S.sample || !!S.gkey || !ready; $("keyOn").hidden = !S.gkey || !!S.sample || !ready;
   if (!ready) return;
   const p = S.packets[S.metric + "|" + S.month];
   drawChart(); drawSummary(p); drawDrivers(p); drawAI(p);
@@ -467,6 +521,9 @@ async function init() {
   document.querySelectorAll("[data-sample]").forEach((b) => b.addEventListener("click", () => {
     setStatus("Loading sample…"); fetch("data/samples/" + b.dataset.sample).then((r) => r.text()).then((t) => loadCSV(t, b.dataset.sample)).catch(() => setStatus("Couldn't load the sample.")); }));
   $("askBtn").addEventListener("click", ask);
+  $("gkeyBtn").addEventListener("click", () => { const k = $("gkey").value.trim(); if (k.length < 20) { $("gkeyStatus").textContent = "That doesn't look like an API key."; return; } $("gkey").value = ""; $("gkeyStatus").textContent = ""; setKey(k); });
+  $("gkeyOff").addEventListener("click", () => setKey(null));
+  try { S.gkey = sessionStorage.getItem("gkey") || null; } catch (e) {}
   window.addEventListener("resize", () => drawChart());
   render();
   if (window.claude && typeof window.claude.use === "function") {
