@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why Did the Metric Move?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Plan: an analyst's workbench. Ink-blue accent on cool paper; serif only for the page title and the
+   AI headline; mono for figures. Layout: controls + trend on top, then "what changed" | "who drove it",
+   then the AI explanation as the conclusion. */
+:root {
+  --paper: #f5f7fa; --panel: #ffffff; --ink: #18202b; --muted: #5d6877; --line: #dde3ea;
+  --accent: #2a5db0; --accent-soft: #e6eefb; --up: #1f8a5b; --down: #c4432f; --warn: #b7791f; --warn-soft: #fbf1dd;
+  --bad-soft: #fbe9e6; --good-soft: #e3f3ea;
+  --display: "Source Serif 4", Georgia, serif; --body: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161c; --panel: #1a2029; --ink: #e8edf3; --muted: #9aa6b5; --line: #2c3541;
+    --accent: #7aa7f0; --accent-soft: #1f2c44; --up: #4cc38a; --down: #f0806d; --warn: #e3b052; --warn-soft: #3a2f19;
+    --bad-soft: #3a211d; --good-soft: #17322a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161c; --panel: #1a2029; --ink: #e8edf3; --muted: #9aa6b5; --line: #2c3541;
+  --accent: #7aa7f0; --accent-soft: #1f2c44; --up: #4cc38a; --down: #f0806d; --warn: #e3b052; --warn-soft: #3a2f19;
+  --bad-soft: #3a211d; --good-soft: #17322a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 48px; display: grid; gap: 18px; }
+header h1 { font-family: var(--display); font-weight: 600; font-size: 30px; margin: 0; text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg button, .tabs button { font: 500 14px var(--body); border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  padding: 7px 12px; border-radius: 999px; cursor: pointer; }
+.seg button[aria-pressed="true"], .tabs button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.legend { color: var(--muted); font-size: 13px; display: flex; gap: 14px; flex-wrap: wrap; margin-left: auto; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+#chart { width: 100%; height: 210px; display: block; margin-top: 10px; }
+#chart text { fill: var(--muted); font: 11px var(--mono); }
+.grid2 { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 18px; }
+@media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+.big { font: 500 34px var(--mono); font-variant-numeric: tabular-nums; }
+.chg { font: 500 16px var(--mono); }
+.pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; }
+.pill.unusual { background: var(--bad-soft); color: var(--down); }
+.pill.normal { background: var(--accent-soft); color: var(--accent); }
+.pill.alert { background: var(--warn-soft); color: var(--warn); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin-top: 12px; font-size: 14px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.split { margin-top: 12px; font-size: 13.5px; }
+.split .bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--line); margin: 6px 0; }
+.drv { display: grid; grid-template-columns: minmax(90px, 1.3fr) 2fr auto; gap: 6px 10px; align-items: center; font-size: 14px; }
+.drv .name { overflow-wrap: anywhere; }
+.drv .track { position: relative; height: 14px; background: color-mix(in srgb, var(--line) 50%, transparent); border-radius: 3px; }
+.drv .fill { position: absolute; top: 0; height: 14px; border-radius: 3px; }
+.drv .num { font: 13px var(--mono); text-align: right; white-space: nowrap; }
+.drv .sub { grid-column: 1 / -1; color: var(--muted); font-size: 12px; margin: -4px 0 4px; }
+.drv h3 { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); font-weight: 600; margin: 10px 0 2px; }
+.tabs { margin-bottom: 10px; } .tabs button { font-size: 12.5px; padding: 5px 10px; }
+.ai h3 { font-family: var(--display); font-size: 22px; font-weight: 600; margin: 4px 0 8px; text-wrap: balance; }
+.ai p { max-width: 75ch; margin: 0 0 10px; }
+.ai ul { margin: 0 0 10px; padding-left: 20px; }
+.ai .meta { color: var(--muted); font-size: 13px; }
+.ai .src { display: inline-block; font-size: 12px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; margin-bottom: 4px; }
+.btn { font: 600 14px var(--body); background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.btn:disabled { opacity: .55; cursor: progress; }
+.check { font-size: 13px; padding: 6px 10px; border-radius: 6px; margin-top: 6px; display: inline-block; }
+.check.ok { background: var(--good-soft); color: var(--up); } .check.bad { background: var(--bad-soft); color: var(--down); }
+textarea { width: 100%; min-height: 64px; font: 14px var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; resize: vertical; }
+.answer { white-space: pre-wrap; margin-top: 10px; }
+.note { color: var(--muted); font-size: 13px; }
+footer { color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Why did the metric move?</h1>
+    <p>Pick a metric and a month. SQL splits the change by region, category, seller and customer type; an AI analyst then explains it in plain English, and every number it uses is checked against the data. Olist marketplace, Brazil, Jan 2017 – Aug 2018. Built by Aarsh Mall.</p>
+  </header>
+
+  <section class="panel" id="controls">
+    <div class="row">
+      <div class="seg row" id="metricButtons" role="group" aria-label="Metric">
+        <button type="button" data-metric="revenue">Revenue</button>
+        <button type="button" data-metric="orders">Orders</button>
+        <button type="button" data-metric="late_pct">Late deliveries</button>
+        <button type="button" data-metric="avg_review_score">Review score</button>
+      </div>
+      <div class="legend"><span><i style="background:var(--down)"></i>Unusual change</span><span><i style="background:var(--warn)"></i>Unusual segment inside a normal total</span><span><i style="background:var(--accent)"></i>Selected</span></div>
+    </div>
+    <svg id="chart" role="img" aria-label="Monthly trend of the selected metric; click a month to explain it"></svg>
+    <p class="note" style="margin:4px 0 0">Click any month on the line to explain its change from the month before.</p>
+  </section>
+
+  <div class="grid2">
+    <section class="panel" id="summary"></section>
+    <section class="panel" id="drivers">
+      <h2>Who drove the change</h2>
+      <div class="tabs row" id="dimTabs" role="group" aria-label="Break down by"></div>
+      <div class="drv" id="drvList"></div>
+      <p class="note" style="margin-top:10px">Contributions inside one breakdown add up exactly to the total change. Breakdowns overlap, so don't add shares across tabs.</p>
+    </section>
+  </div>
+
+  <section class="panel ai" id="ai">
+    <h2>AI analyst</h2>
+    <div id="aiBody"></div>
+    <div class="row" style="margin-top:10px">
+      <button type="button" class="btn" id="explainBtn">Explain this change with AI</button>
+      <span class="note" id="aiStatus"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="ask">
+    <h2>Ask the data</h2>
+    <label for="question" class="note">Ask anything about these four metrics, e.g. "Which months had the worst late deliveries, and which states drove them?"</label>
+    <textarea id="question" placeholder="Type a question about revenue, orders, late deliveries or review scores"></textarea>
+    <div class="row" style="margin-top:8px"><button type="button" class="btn ghost" id="askBtn">Ask</button><span class="note" id="askStatus"></span></div>
+    <div class="answer" id="answer"></div>
+    <div id="askCheck"></div>
+  </section>
+
+  <footer>Data: Olist Brazilian E-Commerce dataset (Kaggle). Metrics and contributions computed in PostgreSQL; explanations written by an LLM (Claude) from those numbers only.</footer>
+</div>
+
+<script>
+const S = { metric: "revenue", month: "2017-11", dim: "Customer state", packets: {}, monthly: {}, saved: {}, live: {}, sample: null };
+const LABEL = { revenue: "Revenue", orders: "Orders", late_pct: "Late deliveries", avg_review_score: "Review score" };
+const DIMS = ["Customer state", "Product category", "Seller state", "Customer region", "Payment type", "Customer type"];
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+const nf0 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const fmtVal = (m, v) => v == null ? "—" : m === "revenue" ? "R$ " + nf0.format(v) : m === "orders" ? nf0.format(v)
+  : m === "late_pct" ? v.toFixed(2) + "%" : v.toFixed(2);
+const fmtChg = (m, v) => { if (v == null) return "—"; const s = v > 0 ? "+" : v < 0 ? "−" : ""; const a = Math.abs(v);
+  return s + (m === "revenue" ? "R$ " + nf0.format(a) : m === "orders" ? nf0.format(a) : m === "late_pct" ? a.toFixed(2) + " pts" : a.toFixed(3)); };
+const isGood = (m, change) => (m === "late_pct" ? change < 0 : change > 0);
+const monthName = (ym) => new Date(ym + "-01T00:00:00Z").toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+
+// ---------- grounding check (same rule as engine/explain.py)
+function allowedNumbers(obj) {
+  const ok = new Set(["1", "2", "3", "4", "5", "6"]);
+  const add = (x) => { x = Math.abs(Number(x)); if (!isFinite(x)) return; for (const d of [0, 1, 2]) ok.add(x.toFixed(d)); ok.add(String(Math.trunc(x))); };
+  const walk = (o) => { if (o == null || typeof o === "boolean") return; if (typeof o === "number") add(o);
+    else if (typeof o === "string") (o.match(/\d+(?:\.\d+)?/g) || []).forEach(add);
+    else if (Array.isArray(o)) o.forEach(walk); else if (typeof o === "object") Object.values(o).forEach(walk); };
+  walk(obj); return ok;
+}
+function ungrounded(text, obj) {
+  const ok = allowedNumbers(obj); const bad = [];
+  text = text.replace(/\b\d{4}-\d{2}(-\d{2})?\b/g, " ");
+  for (const raw of text.match(/\d[\d,]*(?:\.\d+)?/g) || []) {
+    const n = raw.replace(/,/g, "").replace(/\.$/, "");
+    if (ok.has(n) || (/^\d{4}$/.test(n) && +n >= 2016 && +n <= 2019)) continue;
+    if (n.includes(".") && ok.has(n.replace(/0+$/, "").replace(/\.$/, ""))) continue;
+    bad.push(raw);
+  }
+  return bad;
+}
+
+// ---------- chart
+function drawChart() {
+  const svg = $("chart"); const W = svg.clientWidth || 800, H = 210, m = { l: 64, r: 12, t: 12, b: 26 };
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.replaceChildren();
+  const rows = S.monthly[S.metric]; if (!rows) return;
+  const xs = rows.map((_, i) => m.l + i * (W - m.l - m.r) / (rows.length - 1));
+  const vals = rows.map((r) => r.value); const lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.12 || 1; const y = (v) => H - m.b - (v - (lo - pad)) / ((hi + pad) - (lo - pad)) * (H - m.t - m.b);
+  const NS = "http://www.w3.org/2000/svg"; const mk = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  for (let k = 0; k <= 3; k++) { const v = lo - pad + k * ((hi + pad) - (lo - pad)) / 3;
+    svg.append(mk("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: "var(--line)" }));
+    const t = mk("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }); t.textContent = S.metric === "revenue" ? (v / 1e6).toFixed(2) + "M" : S.metric === "orders" ? nf0.format(v) : v.toFixed(S.metric === "late_pct" ? 0 : 1) + (S.metric === "late_pct" ? "%" : ""); svg.append(t); }
+  const area = rows.map((r, i) => `${i ? "L" : "M"}${xs[i]},${y(r.value)}`).join("");
+  svg.append(mk("path", { d: area + `L${xs.at(-1)},${H - m.b}L${xs[0]},${H - m.b}Z`, fill: "var(--accent-soft)", opacity: 0.7 }));
+  svg.append(mk("path", { d: area, fill: "none", stroke: "var(--accent)", "stroke-width": 2 }));
+  const step = Math.max(1, Math.ceil(rows.length / Math.max(2, Math.floor((W - m.l) / 70))));
+  rows.forEach((r, i) => {
+    const ym = r.month.slice(0, 7); const p = S.packets[S.metric + "|" + ym];
+    if (i % step === 0) { const t = mk("text", { x: xs[i], y: H - 6, "text-anchor": "middle" }); t.textContent = monthName(ym).replace(" 20", " ’"); svg.append(t); }
+    const sel = ym === S.month; const color = sel ? "var(--accent)" : p && p.is_unusual ? "var(--down)" : p && p.segment_alerts.length ? "var(--warn)" : "var(--panel)";
+    const c = mk("circle", { cx: xs[i], cy: y(r.value), r: sel ? 7 : 5, fill: color, stroke: sel ? "var(--panel)" : "var(--accent)", "stroke-width": 2, tabindex: p ? 0 : -1, role: "button" });
+    const tt = document.createElementNS(NS, "title"); tt.textContent = `${monthName(ym)}: ${fmtVal(S.metric, r.value)}`; c.append(tt);
+    if (p) { c.style.cursor = "pointer"; const pick = () => { S.month = ym; render(); };
+      c.addEventListener("click", pick); c.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } }); }
+    svg.append(c);
+  });
+}
+
+// ---------- summary
+function drawSummary(p) {
+  const box = $("summary"); box.replaceChildren(el("h2", null, `${LABEL[S.metric]} · ${monthName(S.month)}`));
+  if (!p) { box.append(el("p", "note", "No earlier month to compare with.")); return; }
+  box.append(el("div", "big", fmtVal(S.metric, p.value)));
+  const c = el("div", "chg", `${fmtChg(S.metric, p.change)} (${p.change_pct > 0 ? "+" : ""}${p.change_pct}%) vs ${monthName(prevMonth(S.month))}`);
+  c.style.color = isGood(S.metric, p.change) ? "var(--up)" : "var(--down)"; box.append(c);
+  const pills = el("div", "row"); pills.style.marginTop = "10px";
+  pills.append(el("span", "pill " + (p.is_unusual ? "unusual" : "normal"), p.is_unusual ? `Unusual change (z = ${p.z_score})` : p.z_score == null ? "Too early to judge" : `Normal range (z = ${p.z_score})`));
+  p.segment_alerts.slice(0, 2).forEach((a) => pills.append(el("span", "pill alert", `${a.segment}: unusual move (z = ${a.segment_z_score})`)));
+  box.append(pills);
+  const kv = el("dl", "kv");
+  [["Previous month", fmtVal(S.metric, p.previous_value)], ["This month", fmtVal(S.metric, p.value)], ["Change", fmtChg(S.metric, p.change)]].forEach(([k, v]) => { kv.append(el("dt", null, k), el("dd", null, v)); });
+  box.append(kv);
+  if (S.metric === "revenue") {
+    const s = el("div", "split"); const tot = Math.abs(p.volume_effect) + Math.abs(p.value_effect) || 1;
+    s.append(el("div", null, "Split of the revenue change"));
+    const bar = el("div", "bar"); const a = el("span"); a.style.width = (100 * Math.abs(p.volume_effect) / tot) + "%"; a.style.background = "var(--accent)";
+    const b = el("span"); b.style.width = (100 * Math.abs(p.value_effect) / tot) + "%"; b.style.background = "var(--warn)"; bar.append(a, b); s.append(bar);
+    s.append(el("div", "note", `Number of orders: ${fmtChg("revenue", p.volume_effect)} · Order size (avg R$ ${p.previous_average_order_value} → R$ ${p.average_order_value}): ${fmtChg("revenue", p.value_effect)}`));
+    box.append(s);
+  }
+}
+function prevMonth(ym) { const d = new Date(ym + "-01T00:00:00Z"); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); }
+
+// ---------- drivers
+function drawDrivers(p) {
+  const tabs = $("dimTabs"); tabs.replaceChildren();
+  DIMS.forEach((d) => { const b = el("button", null, d); b.type = "button"; b.setAttribute("aria-pressed", String(d === S.dim)); b.addEventListener("click", () => { S.dim = d; drawDrivers(p); }); tabs.append(b); });
+  const list = $("drvList"); list.replaceChildren();
+  if (!p || !p.drivers[S.dim]) { list.append(el("p", "note", "No breakdown for this month.")); return; }
+  const d = p.drivers[S.dim]; const all = [...d.pushed_with_the_change, ...d.pushed_against_the_change];
+  const max = Math.max(...all.map((x) => Math.abs(x.contribution)), 1e-9);
+  const sec = (title, items, sign) => {
+    if (!items.length) return; list.append(el("h3", null, title));
+    items.forEach((x) => {
+      list.append(el("div", "name", x.segment));
+      const tr = el("div", "track"); const f = el("div", "fill"); f.style.width = (100 * Math.abs(x.contribution) / max) + "%"; f.style.left = "0";
+      f.style.background = isGood(S.metric, x.contribution) ? "var(--up)" : "var(--down)"; tr.append(f); list.append(tr);
+      list.append(el("div", "num", `${fmtChg(S.metric, x.contribution)} · ${x.share_of_change_pct}%`));
+      const before = S.metric === "late_pct" ? `late rate ${x.segment_value_before ?? "—"}% → ${x.segment_value_now ?? "—"}%` : S.metric === "avg_review_score" ? `avg ${x.segment_value_before ?? "—"} → ${x.segment_value_now ?? "—"} stars` : `${fmtVal(S.metric, x.segment_value_before)} → ${fmtVal(S.metric, x.segment_value_now)}`;
+      list.append(el("div", "sub", before + (x.segment_z_score != null && Math.abs(x.segment_z_score) >= 4 ? ` · unusual for this segment (z = ${x.segment_z_score})` : "")));
+    });
+  };
+  sec("Pushed in the direction of the change", d.pushed_with_the_change, 1);
+  sec("Pushed against it", d.pushed_against_the_change, -1);
+}
+
+// ---------- AI explanation
+const SYSTEM = `You are a senior data analyst at an e-commerce marketplace. You explain why a business metric changed from one month to the next, for managers who do not read SQL.
+You receive one JSON "insight packet": the metric, its change, a z_score (how unusual the change is compared with the previous 6 monthly changes; |z| >= 2 is unusual), segment_alerts (segments whose own move was unusual) and, for several dimensions, the segments that pushed the metric with or against the change. A segment's "contribution" is its exact part of the total change; contributions within one dimension add up to the total. For late_pct and avg_review_score, contribution is in percentage points or score points and segment_value_now/before is the segment's own rate.
+Rules:
+- Use ONLY numbers that appear in the packet. Do not compute new totals, averages or percentages. You may round, but write numbers in full (R$ 87,864, not R$ 88K).
+- Name the 2-3 segments that explain most of the change, with their share_of_change_pct. Prefer customer state, product category and seller state; customer type and payment type have few segments, so mention them only when notable.
+- Do not add shares across dimensions (they overlap).
+- Say whether the change is unusual using the z_score, in plain words; if segment_alerts is not empty, mention that segment.
+- For revenue, say whether it came from the number of orders (volume_effect) or order size (value_effect).
+- Describe what the data shows; do not claim causes the data cannot show. Suggest checks instead.
+- Plain business English, no markdown.
+Return ONLY a JSON object: {"headline": string (max 14 words), "explanation": string (3-5 sentences), "key_drivers": [2-3 short strings], "caveat": string, "next_questions": [2 strings]}.`;
+
+function drawAI(p) {
+  const body = $("aiBody"); body.replaceChildren();
+  const key = S.metric + "|" + S.month; const ans = S.live[key] || S.saved[key];
+  if (!p) return;
+  if (!ans) {
+    body.append(el("p", "note", S.sample ? "No explanation yet for this month. Ask the AI analyst: it reads the numbers above and explains them." : "Saved explanations exist for the 9 unusual months (red dots). Live explanations work when this page is opened in Claude."));
+  } else {
+    body.append(el("span", "src", S.live[key] ? "Written live by Claude just now" : "Saved explanation (written by Claude)"));
+    body.append(el("h3", null, ans.headline)); body.append(el("p", null, ans.explanation));
+    const ul = el("ul"); (ans.key_drivers || []).forEach((k) => ul.append(el("li", null, k))); body.append(ul);
+    body.append(el("p", "meta", "Caveat: " + ans.caveat));
+    body.append(el("p", "meta", "Check next: " + (ans.next_questions || []).join(" · ")));
+    const text = [ans.headline, ans.explanation, ...(ans.key_drivers || []), ans.caveat, ...(ans.next_questions || [])].join(" ");
+    const bad = ungrounded(text, p); const nums = (text.replace(/\b\d{4}-\d{2}\b/g, "").match(/\d[\d,]*(?:\.\d+)?/g) || []).length;
+    body.append(el("span", "check " + (bad.length ? "bad" : "ok"), bad.length ? `Grounding check: ${bad.length} number(s) not found in the data: ${bad.join(", ")}` : `Grounding check passed: all ${nums} numbers come from the data`));
+  }
+  const btn = $("explainBtn"); btn.hidden = !S.sample; btn.textContent = ans ? "Ask the AI again (live)" : "Explain this change with AI";
+}
+
+async function explainLive() {
+  const p = S.packets[S.metric + "|" + S.month]; if (!p || !S.sample) return;
+  const btn = $("explainBtn"), st = $("aiStatus"); btn.disabled = true; st.textContent = "The AI analyst is reading the numbers…";
+  try {
+    const ans = await S.sample.json([{ role: "user", content: SYSTEM + "\n\nInsight packet:\n" + JSON.stringify(p) }], { modelTier: "default", cache: false });
+    if (!ans || !ans.headline) throw { message: "The answer was not in the expected format. Try again." };
+    S.live[S.metric + "|" + S.month] = ans; st.textContent = ""; drawAI(p);
+  } catch (e) {
+    if (e && e.code === "not_granted") { S.sample = null; st.textContent = "Live AI is turned off for this page."; drawAI(p); }
+    else if (e && e.code === "rate_limited") st.textContent = "Too many requests right now. Wait a minute and try again.";
+    else st.textContent = (e && e.message) || "Something went wrong. Try again.";
+  } finally { btn.disabled = false; }
+}
+
+// ---------- ask the data (Claude calls page functions as tools)
+async function ask() {
+  const q = $("question").value.trim(); if (!q || !S.sample) return;
+  const btn = $("askBtn"), st = $("askStatus"), out = $("answer"), chk = $("askCheck");
+  btn.disabled = true; st.textContent = "Thinking…"; out.textContent = ""; chk.replaceChildren();
+  const seen = [];
+  const tools = [
+    { name: "list_months", description: "Monthly values, % change, z_score and alerts for one metric (revenue, orders, late_pct, avg_review_score).",
+      inputSchema: { type: "object", properties: { metric: { type: "string", enum: Object.keys(LABEL) } }, required: ["metric"] },
+      execute: ({ metric }) => { const r = (S.monthly[metric] || []).map((x) => { const p = S.packets[metric + "|" + x.month.slice(0, 7)];
+        return { month: x.month.slice(0, 7), value: x.value, change_pct: x.change_pct, z_score: x.z_score, is_unusual: p ? p.is_unusual : false, alerts: p ? p.segment_alerts.map((a) => a.segment) : [] }; }); seen.push(r); return r; } },
+    { name: "get_drivers", description: "Full insight packet (change, z_score, top segments by dimension with contribution and share_of_change_pct) for one metric and month (YYYY-MM).",
+      inputSchema: { type: "object", properties: { metric: { type: "string", enum: Object.keys(LABEL) }, month: { type: "string" } }, required: ["metric", "month"] },
+      execute: ({ metric, month }) => { const p = S.packets[metric + "|" + month]; if (!p) throw new Error("No data for " + metric + " " + month); seen.push(p); return p; } },
+  ];
+  try {
+    const res = await S.sample([{ role: "user", content: "You answer questions about an e-commerce marketplace (Olist, Brazil, Jan 2017 - Aug 2018) using the tools, which return numbers computed in SQL. Use only numbers returned by the tools; do not calculate new ones. Contributions inside one dimension add up to the change. Answer in under 150 words, plain English, no markdown tables.\n\nQuestion: " + q }],
+      { tools, modelTier: "default", cache: false, onText: ({ text }) => { out.textContent = text; } });
+    out.textContent = res.text; st.textContent = "";
+    const bad = ungrounded(res.text, seen);
+    chk.append(el("span", "check " + (bad.length ? "bad" : "ok"), bad.length ? `Grounding check: ${bad.join(", ")} not found in the data the AI looked up` : "Grounding check passed: every number came from the data the AI looked up"));
+  } catch (e) {
+    if (e && e.code === "not_granted") { S.sample = null; st.textContent = "Live AI is turned off for this page."; render(); }
+    else if (e && e.code === "rate_limited") st.textContent = "Too many requests right now. Wait a minute and try again.";
+    else st.textContent = (e && e.message) || "Something went wrong. Try again.";
+  } finally { btn.disabled = false; }
+}
+
+function render() {
+  document.querySelectorAll("#metricButtons button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.metric === S.metric)));
+  const p = S.packets[S.metric + "|" + S.month];
+  drawChart(); drawSummary(p); drawDrivers(p); drawAI(p);
+  $("ask").hidden = !S.sample;
+}
+
+async function init() {
+  const [packets, monthly, saved] = await Promise.all(["data/packets.json", "data/monthly.json", "data/saved_explanations.json"].map((u) => fetch(u).then((r) => r.json())));
+  packets.forEach((p) => { S.packets[p.metric + "|" + p.month] = p; });
+  monthly.forEach((m) => { (S.monthly[m.metric] ||= []).push(m); });
+  S.saved = saved;
+  document.querySelectorAll("#metricButtons button").forEach((b) => b.addEventListener("click", () => {
+    S.metric = b.dataset.metric; if (!S.packets[S.metric + "|" + S.month]) S.month = "2017-11"; render(); }));
+  $("explainBtn").addEventListener("click", explainLive);
+  $("askBtn").addEventListener("click", ask);
+  window.addEventListener("resize", () => drawChart());
+  render();
+  if (window.claude && typeof window.claude.use === "function") {
+    window.claude.use("sample").then((s) => { S.sample = s; render(); }).catch(() => {});
+  }
+}
+init().catch(() => { $("summary").replaceChildren(el("p", "note", "Could not load the data files. Reload the page.")); });
+</script>
+</body>
+</html>
